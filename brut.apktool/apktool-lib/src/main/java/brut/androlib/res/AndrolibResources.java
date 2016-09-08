@@ -19,26 +19,35 @@ package brut.androlib.res;
 import brut.androlib.AndrolibException;
 import brut.androlib.ApkOptions;
 import brut.androlib.err.CantFindFrameworkResException;
+import brut.androlib.meta.PackageInfo;
+import brut.androlib.meta.VersionInfo;
 import brut.androlib.res.data.*;
 import brut.androlib.res.decoder.*;
 import brut.androlib.res.decoder.ARSCDecoder.ARSCData;
 import brut.androlib.res.decoder.ARSCDecoder.FlagsOffset;
-import brut.androlib.res.util.*;
+import brut.androlib.res.util.ExtFile;
+import brut.androlib.res.util.ExtMXSerializer;
+import brut.androlib.res.util.ExtXmlSerializer;
 import brut.androlib.res.xml.ResValuesXmlSerializable;
 import brut.androlib.res.xml.ResXmlPatcher;
 import brut.common.BrutException;
-import brut.directory.*;
-import brut.util.*;
+import brut.directory.Directory;
+import brut.directory.DirectoryException;
+import brut.directory.FileDirectory;
+import brut.util.Duo;
+import brut.util.Jar;
+import brut.util.OS;
+import brut.util.OSDetection;
+import org.apache.commons.io.IOUtils;
+import org.xmlpull.v1.XmlSerializer;
+
 import java.io.*;
 import java.util.*;
 import java.util.logging.Logger;
-import java.util.zip.*;
-
-import java.io.File;
-import java.io.IOException;
-
-import org.apache.commons.io.IOUtils;
-import org.xmlpull.v1.XmlSerializer;
+import java.util.zip.CRC32;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * @author Ryszard Wiśniewski <brut.alll@gmail.com>
@@ -230,10 +239,16 @@ final public class AndrolibResources {
             out = new FileDirectory(outDir);
 
             inApk = apkFile.getDirectory();
+            out = out.createDir("res");
             if (inApk.containsDir("res")) {
                 in = inApk.getDir("res");
             }
-            out = out.createDir("res");
+            if (in == null && inApk.containsDir("r")) {
+                in = inApk.getDir("r");
+            }
+            if (in == null && inApk.containsDir("R")) {
+                in = inApk.getDir("R");
+            }
         } catch (DirectoryException ex) {
             throw new AndrolibException(ex);
         }
@@ -268,22 +283,22 @@ final public class AndrolibResources {
         }
     }
 
-    public void setVersionInfo(Map<String, String> map) {
-        if (map != null) {
-            mVersionCode = map.get("versionCode");
-            mVersionName = map.get("versionName");
+    public void setVersionInfo(VersionInfo versionInfo) {
+        if (versionInfo != null) {
+            mVersionCode = versionInfo.versionCode;
+            mVersionName = versionInfo.versionName;
         }
     }
 
-    public void setPackageInfo(Map<String, String> map) {
-        if (map != null) {
-            mPackageRenamed = map.get("rename-manifest-package");
+    public void setPackageRenamed(PackageInfo packageInfo) {
+        if (packageInfo != null) {
+            mPackageRenamed = packageInfo.renameManifestPackage;
         }
     }
 
-    public void setPackageId(Map<String, String> map) {
-        if (map != null) {
-            mPackageId = map.get("forced-package-id");
+    public void setPackageId(PackageInfo packageInfo) {
+        if (packageInfo != null) {
+            mPackageId = packageInfo.forcedPackageId;
         }
     }
 
@@ -337,7 +352,6 @@ final public class AndrolibResources {
         if (apkOptions.debugMode) { // inject debuggable="true" into manifest
             cmd.add("--debug-mode");
         }
-
         // force package id so that some frameworks build with correct id
         // disable if user adds own aapt (can't know if they have this feature)
         if (mPackageId != null && ! customAapt && ! mSharedLibrary) {
@@ -613,6 +627,23 @@ final public class AndrolibResources {
             entry.setCrc(crc.getValue());
             out.putNextEntry(entry);
             out.write(data);
+            out.closeEntry();
+            
+            //Write fake AndroidManifest.xml file to support original aapt
+            entry = zip.getEntry("AndroidManifest.xml");
+            if (entry != null) {
+                in = zip.getInputStream(entry);
+                byte[] manifest = IOUtils.toByteArray(in);
+                CRC32 manifestCrc = new CRC32();
+                manifestCrc.update(manifest);
+                entry.setSize(manifest.length);
+                entry.setCompressedSize(-1);
+                entry.setCrc(manifestCrc.getValue());
+                out.putNextEntry(entry);
+                out.write(manifest);
+                out.closeEntry();
+            }
+
             zip.close();
             LOGGER.info("Framework installed to: " + outFile);
         } catch (IOException ex) {
@@ -652,7 +683,7 @@ final public class AndrolibResources {
         }
     }
 
-    private File getFrameworkDir() throws AndrolibException {
+    public File getFrameworkDir() throws AndrolibException {
         if (mFrameworkDirectory != null) {
             return mFrameworkDirectory;
         }
@@ -675,8 +706,10 @@ final public class AndrolibResources {
 
             if (OSDetection.isMacOSX()) {
                 path = parentPath.getAbsolutePath() + String.format("%1$sLibrary%1$sapktool%1$sframework", File.separatorChar);
+            } else if (OSDetection.isWindows()) {
+                path = parentPath.getAbsolutePath() + String.format("%1$sAppData%1$sLocal%1$sapktool%1$sframework", File.separatorChar);
             } else {
-                path = parentPath.getAbsolutePath() + String.format("%1$sapktool%1$sframework", File.separatorChar);
+                path = parentPath.getAbsolutePath() + String.format("%1$s.local%1$sshare%1$sapktool%1$sframework", File.separatorChar);
             }
         }
 
@@ -762,7 +795,8 @@ final public class AndrolibResources {
     private boolean mSharedLibrary = false;
 
     private final static String[] IGNORED_PACKAGES = new String[] {
-            "android", "com.htc", "miui", "com.lge", "com.lge.internal", "yi", "com.miui.core" };
+            "android", "com.htc", "miui", "com.lge", "com.lge.internal", "yi", "com.miui.core", "flyme",
+            "air.com.adobe.appentry" };
 
     private final static String[] ALLOWED_PACKAGES = new String[] {
             "com.miui" };

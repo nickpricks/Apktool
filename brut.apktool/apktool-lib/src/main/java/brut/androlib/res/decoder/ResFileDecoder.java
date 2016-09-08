@@ -53,7 +53,7 @@ public class ResFileDecoder {
         if (extPos == -1) {
             outFileName = outResName;
         } else {
-            ext = inFileName.substring(extPos);
+            ext = inFileName.substring(extPos).toLowerCase();
             outFileName = outResName + ext;
         }
 
@@ -106,7 +106,7 @@ public class ResFileDecoder {
         } catch (AndrolibException ex) {
             LOGGER.log(Level.SEVERE, String.format(
                     "Could not decode file, replacing by FALSE value: %s",
-                    inFileName, outFileName), ex);
+                    inFileName), ex);
             res.replace(new ResBoolValue(false, 0, null));
         }
     }

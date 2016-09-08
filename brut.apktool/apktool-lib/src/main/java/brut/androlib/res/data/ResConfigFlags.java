@@ -51,9 +51,13 @@ public class ResConfigFlags {
     private final char[] localeScript;
     private final char[] localeVariant;
 
+    private final byte screenLayout2;
+
     public final boolean isInvalid;
 
     private final String mQualifiers;
+
+    private final int size;
 
     public ResConfigFlags() {
         mcc = 0;
@@ -76,8 +80,10 @@ public class ResConfigFlags {
         screenHeightDp = 0;
         localeScript = null;
         localeVariant = null;
+        screenLayout2 = 0;
         isInvalid = false;
         mQualifiers = "";
+        size = 0;
     }
 
     public ResConfigFlags(short mcc, short mnc, char[] language,
@@ -87,7 +93,7 @@ public class ResConfigFlags {
                           short sdkVersion, byte screenLayout, byte uiMode,
                           short smallestScreenWidthDp, short screenWidthDp,
                           short screenHeightDp, char[] localeScript, char[] localeVariant,
-                          boolean isInvalid) {
+                          byte screenLayout2, boolean isInvalid, int size) {
         if (orientation < 0 || orientation > 3) {
             LOGGER.warning("Invalid orientation value: " + orientation);
             orientation = 0;
@@ -150,7 +156,9 @@ public class ResConfigFlags {
         this.screenHeightDp = screenHeightDp;
         this.localeScript = localeScript;
         this.localeVariant = localeVariant;
+        this.screenLayout2 = screenLayout2;
         this.isInvalid = isInvalid;
+        this.size = size;
         mQualifiers = generateQualifiers();
     }
 
@@ -165,14 +173,22 @@ public class ResConfigFlags {
             if (mnc != MNC_ZERO) {
                 if (mnc != 0) {
                     ret.append("-mnc");
-                    if (mnc > 0 && mnc < 10) {
-                        ret.append(String.format("%02d", mnc));
+                    if (size <= 32) {
+                        if (mnc > 0 && mnc < 10) {
+                            ret.append(String.format("%02d", mnc));
+                        } else {
+                            ret.append(String.format("%03d", mnc));
+                        }
                     } else {
-                        ret.append(String.format("%03d", mnc));
+                        ret.append(mnc);
                     }
                 }
             } else {
                 ret.append("-mnc00");
+            }
+        } else {
+            if (mnc != 0) {
+                ret.append("-mnc").append(mnc);
             }
         }
         ret.append(getLocaleString());
@@ -214,6 +230,14 @@ public class ResConfigFlags {
                 break;
             case SCREENLONG_NO:
                 ret.append("-notlong");
+                break;
+        }
+        switch (screenLayout2 & MASK_SCREENROUND) {
+            case SCREENLAYOUT_ROUND_NO:
+                ret.append("-notround");
+                break;
+            case SCREENLAYOUT_ROUND_YES:
+                ret.append("-round");
                 break;
         }
         switch (orientation) {
@@ -373,6 +397,9 @@ public class ResConfigFlags {
     }
 
     private short getNaturalSdkVersionRequirement() {
+        if ((screenLayout2 & MASK_SCREENROUND) != 0) {
+            return SDK_MNC;
+        }
         if (density == DENSITY_ANY) {
             return SDK_LOLLIPOP;
         }
@@ -479,6 +506,7 @@ public class ResConfigFlags {
     public final static byte SDK_KITKAT = 19;
     public final static byte SDK_LOLLIPOP = 21;
     public final static byte SDK_LOLLIPOP_MR1 = 22;
+    public final static byte SDK_MNC = 23;
 
     public final static byte ORIENTATION_ANY = 0;
     public final static byte ORIENTATION_PORT = 1;
@@ -509,6 +537,11 @@ public class ResConfigFlags {
     public final static short SCREENLAYOUT_LAYOUTDIR_LTR = 0x40;
     public final static short SCREENLAYOUT_LAYOUTDIR_RTL = 0x80;
     public final static short SCREENLAYOUT_LAYOUTDIR_SHIFT = 0x06;
+
+    public final static short MASK_SCREENROUND = 0x03;
+    public final static short SCREENLAYOUT_ROUND_ANY = 0;
+    public final static short SCREENLAYOUT_ROUND_NO = 0x1;
+    public final static short SCREENLAYOUT_ROUND_YES = 0x2;
 
     public final static byte KEYBOARD_ANY = 0;
     public final static byte KEYBOARD_NOKEYS = 1;

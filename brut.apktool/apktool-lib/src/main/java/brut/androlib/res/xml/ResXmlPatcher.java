@@ -51,15 +51,15 @@ public final class ResXmlPatcher {
         if (file.exists()) {
             try {
                 Document doc = loadDocument(file);
-                Node application = doc.getElementById("application");
+                Node application = doc.getElementsByTagName("application").item(0);
 
                 // load attr
                 NamedNodeMap attr = application.getAttributes();
-                Node debugAttr = attr.getNamedItem("debug");
+                Node debugAttr = attr.getNamedItem("android:debuggable");
 
-                // remove application:debug
+                // remove application:debuggable
                 if (debugAttr != null) {
-                    attr.removeNamedItem("debug");
+                    attr.removeNamedItem("android:debuggable");
                 }
 
                 saveDocument(file, doc);
@@ -82,6 +82,7 @@ public final class ResXmlPatcher {
      * @throws AndrolibException
      */
     public static void fixingPublicAttrsInProviderAttributes(File file) throws AndrolibException {
+        boolean saved = false;
         if (file.exists()) {
             try {
                 Document doc = loadDocument(file);
@@ -104,10 +105,40 @@ public final class ResXmlPatcher {
 
                             if (replacement != null) {
                                 provider.setNodeValue(replacement);
-                                saveDocument(file, doc);
+                                saved = true;
                             }
                         }
                     }
+                }
+
+                // android:scheme
+                xPath = XPathFactory.newInstance().newXPath();
+                expression = xPath.compile("/manifest/application/activity/intent-filter/data");
+
+                result = expression.evaluate(doc, XPathConstants.NODESET);
+                nodes = (NodeList) result;
+
+                for (int i = 0; i < nodes.getLength(); i++) {
+                    Node node = nodes.item(i);
+                    NamedNodeMap attrs = node.getAttributes();
+
+                    if (attrs != null) {
+                        Node provider = attrs.getNamedItem("android:scheme");
+
+                        if (provider != null) {
+                            String reference = provider.getNodeValue();
+                            String replacement = pullValueFromStrings(file.getParentFile(), reference);
+
+                            if (replacement != null) {
+                                provider.setNodeValue(replacement);
+                                saved = true;
+                            }
+                        }
+                    }
+                }
+
+                if (saved) {
+                    saveDocument(file, doc);
                 }
 
             }  catch (SAXException | ParserConfigurationException | IOException |
@@ -125,7 +156,7 @@ public final class ResXmlPatcher {
      * @throws AndrolibException
      */
     public static String pullValueFromStrings(File directory, String key) throws AndrolibException {
-        if (! key.contains("@")) {
+        if (key == null || ! key.contains("@")) {
             return null;
         }
 

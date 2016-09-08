@@ -16,13 +16,17 @@
 
 package brut.androlib;
 
+import brut.androlib.res.AndrolibResources;
 import brut.common.BrutException;
 import brut.directory.*;
 import java.io.*;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
+
+import brut.util.OS;
 import org.custommonkey.xmlunit.ElementQualifier;
 import org.w3c.dom.Element;
 import org.xmlpull.v1.*;
@@ -35,8 +39,7 @@ public abstract class TestUtils {
     public static Map<String, String> parseStringsXml(File file)
             throws BrutException {
         try {
-            XmlPullParser xpp = XmlPullParserFactory.newInstance()
-                    .newPullParser();
+            XmlPullParser xpp = XmlPullParserFactory.newInstance().newPullParser();
             xpp.setInput(new FileReader(file));
 
             int eventType;
@@ -81,16 +84,14 @@ public abstract class TestUtils {
      * implementation uses brut.dir. I think I should merge all my projects to
      * single brut.common .
      */
-    public static void copyResourceDir(Class class_, String dirPath, File out)
-            throws BrutException {
+    public static void copyResourceDir(Class class_, String dirPath, File out) throws BrutException {
         if (!out.exists()) {
             out.mkdirs();
         }
         copyResourceDir(class_, dirPath, new FileDirectory(out));
     }
 
-    public static void copyResourceDir(Class class_, String dirPath,
-                                       Directory out) throws BrutException {
+    public static void copyResourceDir(Class class_, String dirPath, Directory out) throws BrutException {
         if (class_ == null) {
             class_ = Class.class;
         }
@@ -109,14 +110,36 @@ public abstract class TestUtils {
         if (dirURL.getProtocol().equals("jar")) {
             String jarPath;
             try {
-                jarPath = URLDecoder.decode(
-                        dirURL.getPath().substring(5,
-                                dirURL.getPath().indexOf("!")), "UTF-8");
+                jarPath = URLDecoder.decode(dirURL.getPath().substring(5, dirURL.getPath().indexOf("!")), "UTF-8");
             } catch (UnsupportedEncodingException ex) {
                 throw new BrutException(ex);
             }
             DirUtil.copyToDir(new FileDirectory(jarPath), out);
         }
+    }
+
+    /**
+     *
+     * @throws AndrolibException
+     * @throws BrutException
+     */
+    public static void cleanFrameworkFile() throws AndrolibException, BrutException {
+        File framework = new File(getFrameworkDir(), "1.apk");
+
+        if (Files.exists(framework.toPath())) {
+            OS.rmfile(framework.getAbsolutePath());
+        }
+    }
+
+    /**
+     *
+     * @return File
+     * @throws AndrolibException
+     */
+    public static File getFrameworkDir() throws AndrolibException {
+        AndrolibResources androlibResources = new AndrolibResources();
+        androlibResources.apkOptions = new ApkOptions();
+        return androlibResources.getFrameworkDir();
     }
 
     public static class ResValueElementQualifier implements ElementQualifier {
@@ -133,9 +156,11 @@ public abstract class TestUtils {
                 testType = test.getAttribute("type");
             }
 
-            return controlType.equals(testType)
-                    && control.getAttribute("name").equals(
-                    test.getAttribute("name"));
+            return controlType.equals(testType) && control.getAttribute("name").equals(test.getAttribute("name"));
         }
+    }
+
+    public static String replaceNewlines(String value) {
+        return value.replace("\n", "").replace("\r", "");
     }
 }

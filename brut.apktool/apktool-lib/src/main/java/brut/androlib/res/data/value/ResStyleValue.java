@@ -45,7 +45,7 @@ public class ResStyleValue extends ResBagValue implements
                                         ResResource res) throws IOException, AndrolibException {
         serializer.startTag(null, "style");
         serializer.attribute(null, "name", res.getResSpec().getName());
-        if (!mParent.isNull()) {
+        if (!mParent.isNull() && !mParent.referentIsNull()) {
             serializer.attribute(null, "parent", mParent.encodeAsResXmlAttr());
         } else if (res.getResSpec().getName().indexOf('.') != -1) {
             serializer.attribute(null, "parent", "");
@@ -59,7 +59,8 @@ public class ResStyleValue extends ResBagValue implements
             // hacky-fix remove bad ReferenceVars
             if (resource.contains("ResReferenceValue@")) {
                 continue;
-            } else if (resource.contains("ResStringValue@")) {
+            } else if (resource.contains("ResStringValue@") || resource.contains("ResStyleValue@") ||
+                    resource.contains("ResBoolValue@")) {
                 name = "@" + spec.getFullName(res.getResSpec().getPackage(), false);
             } else {
                 ResAttr attr = (ResAttr) spec.getDefaultResource().getValue();
